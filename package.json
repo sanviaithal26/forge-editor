@@ -12,12 +12,30 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
-      {
+    
+"commands": [
+    {
         "command": "forge-editor.openAgent",
         "title": "Forge Editor: Open Agent"
-      }
-    ]
+    },
+    {
+        "command": "forge-editor.reviewEdits",
+        "title": "Forge Editor: Review Staged Changes"
+    },
+    {
+        "command": "forge-editor.applyHunks",
+        "title": "Forge Editor: Apply Selected Hunks"
+    },
+    {
+        "command": "forge-editor.rejectEdit",
+        "title": "Forge Editor: Reject Staged Change"
+    },
+    {
+        "command": "forge-editor.undoEdit",
+        "title": "Forge Editor: Undo Last Applied Change"
+    }
+]
+
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -46,6 +64,7 @@
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "@truefoundry/trueforge-sdk": "^0.185.0",
+    "diff": "^8.0.4",
     "express": "^5.3.0",
     "zod": "^4.6.7"
   }
