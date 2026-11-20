@@ -1,6 +1,8 @@
 
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
+import { registerReviewCommands } from './editing/review';
+import { registerMultiReview } from './editing/multiReview';
 
 const BASE_URL = 'http://localhost:8790';
 
@@ -27,8 +29,32 @@ When the user asks about repository code:
 5. Never invent source code or claim that you inspected
    files unless you actually used the tools.
 
-You cannot currently modify files or run tests.
-Do not claim otherwise.
+
+When a user asks you to modify code:
+
+1. Search for the relevant source files.
+2. Read the exact source code before proposing changes.
+3. Use propose_edit to stage changes.
+4. Provide exact, unique old_text snippets and their replacements.
+5. Do not claim the edits have been applied.
+6. Never modify source files directly.
+7. Tell the user to review proposals using
+   "Forge Editor: Review Staged Changes".
+
+
+When a user asks you to modify code:
+
+1. Search for the relevant source files.
+2. Read the exact source code before proposing changes.
+3. Use propose_edit to stage changes.
+4. Provide exact, unique old_text snippets and their replacements.
+5. Do not claim the edits have been applied.
+6. Never modify source files directly.
+7. Tell the user to review proposals using
+   "Forge Editor: Review Staged Changes".
+
+You may propose edits to multiple files.
+You cannot apply them or run tests yet.
 
 The available tools currently access a fixed Flask
 test workspace, not arbitrary open VS Code folders.
@@ -40,7 +66,8 @@ export function activate(context: vscode.ExtensionContext) {
         'forge-editor.openAgent',
         () => openAgentPanel()
     );
-
+    registerReviewCommands(context);
+    registerMultiReview(context);
     context.subscriptions.push(disposable);
 }
 
@@ -102,7 +129,8 @@ async function openAgentPanel() {
                             enableTools: [
                                 'list_files',
                                 'read_file',
-                                'search_code'
+                                'search_code',
+                                'propose_edit'
                             ],
                             preload: true
                         }
