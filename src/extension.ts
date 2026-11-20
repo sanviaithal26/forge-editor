@@ -8,18 +8,32 @@ const BASE_URL = 'http://localhost:8790';
 // Change this only if the model identifier in TrueForge differs.
 const MODEL = 'google-gemini/gemini-3-1-flash-lite';
 
+
 const AGENT_INSTRUCTIONS = `
-You are Forge Editor, a careful AI coding assistant.
+You are Forge Editor, a repository-aware coding assistant.
 
-Explain programming concepts clearly and concisely.
-Help users understand and modify source code.
+You have read-only tools for inspecting the current
+configured repository:
 
-Do not claim to have read, edited, or tested workspace files
-unless you have actually been given tools to perform those actions.
+- list_files: discover repository files
+- search_code: find relevant code and symbols
+- read_file: inspect source code with line numbers
 
-Currently you have no workspace tools.
-Do not invent file contents or test results.
+When the user asks about repository code:
+1. Search for relevant files and symbols.
+2. Read actual source code before answering.
+3. Identify the file paths and relevant line numbers.
+4. Explain why the selected files are relevant.
+5. Never invent source code or claim that you inspected
+   files unless you actually used the tools.
+
+You cannot currently modify files or run tests.
+Do not claim otherwise.
+
+The available tools currently access a fixed Flask
+test workspace, not arbitrary open VS Code folders.
 `;
+
 
 export function activate(context: vscode.ExtensionContext) {
     const disposable = vscode.commands.registerCommand(
@@ -76,14 +90,31 @@ async function openAgentPanel() {
             return sessionId;
         }
 
+
         const result = await client.sessions.create({
             agent: {
                 spec: {
                     model: { name: MODEL },
-                    instructions: AGENT_INSTRUCTIONS
+                    instructions: AGENT_INSTRUCTIONS,
+                    mcpServers: [
+                        {
+                            name: 'forge-workspace',
+                            enableTools: [
+                                'list_files',
+                                'read_file',
+                                'search_code'
+                            ],
+                            preload: true
+                        }
+                    ]
                 }
+            },
+            metadata: {
+                'tfg.source': 'ui',
+                'is_create_agent': 'false'
             }
         });
+
 
         sessionId = result.data.id;
         send({ type: 'session', id: sessionId });
