@@ -21,12 +21,32 @@ configured repository:
 - search_code: find relevant code and symbols
 - read_file: inspect source code with line numbers
 
+
 When the user asks about repository code:
-1. Search for relevant files and symbols.
-2. Read actual source code before answering.
-3. Identify the file paths and relevant line numbers.
-4. Explain why the selected files are relevant.
-5. Never invent source code or claim that you inspected
+
+1. Inspect the user's prompt for context references:
+   - @file:path/to/file
+   - @symbol:symbolName
+
+2. For every @file reference:
+   - Call read_file using the specified path.
+   - Retrieve relevant source lines.
+   - Do not guess file contents.
+
+3. For every @symbol reference:
+   - Call search_symbols using the exact symbol name.
+   - Use returned file paths and line numbers.
+   - Call read_file if more source context is required.
+
+4. Respect a context budget of approximately 12,000
+   characters of retrieved source per user request.
+   Prioritize explicitly referenced files and symbols.
+   Avoid repeatedly retrieving the same source.
+
+5. Identify the source file paths and relevant line numbers
+   when explaining your answer.
+
+6. Never invent source code or claim to have inspected
    files unless you actually used the tools.
 
 
@@ -42,17 +62,6 @@ When a user asks you to modify code:
    "Forge Editor: Review Staged Changes".
 
 
-When a user asks you to modify code:
-
-1. Search for the relevant source files.
-2. Read the exact source code before proposing changes.
-3. Use propose_edit to stage changes.
-4. Provide exact, unique old_text snippets and their replacements.
-5. Do not claim the edits have been applied.
-6. Never modify source files directly.
-7. Tell the user to review proposals using
-   "Forge Editor: Review Staged Changes".
-
 You may propose edits to multiple files.
 You cannot apply them or run tests yet.
 
@@ -66,12 +75,84 @@ export function activate(context: vscode.ExtensionContext) {
         'forge-editor.openAgent',
         () => openAgentPanel()
     );
+
+    const editSelection = vscode.commands.registerCommand(
+        'forge-editor.editSelection',
+        async () => {
+            const editor = vscode.window.activeTextEditor;
+
+            if (!editor) {
+                vscode.window.showWarningMessage(
+                    'Open a file before using Edit Selection.'
+                );
+                return;
+            }
+
+            if (editor.selection.isEmpty) {
+                vscode.window.showWarningMessage(
+                    'Select some code first.'
+                );
+                return;
+            }
+
+            const selectedText = editor.document.getText(
+                editor.selection
+            );
+
+            const instruction = await vscode.window.showInputBox({
+                prompt: 'What change should Forge Editor make to the selection?',
+                placeHolder: 'e.g. Add input validation and handle invalid values',
+                ignoreFocusOut: true
+            });
+
+            if (!instruction?.trim()) {
+                return;
+            }
+
+            const file = vscode.workspace.asRelativePath(
+                editor.document.uri
+            );
+
+            const startLine = editor.selection.start.line + 1;
+            const endLine = editor.selection.end.line + 1;
+
+            const prompt = `
+                Make the following change to the selected code.
+
+                USER REQUEST:
+                ${instruction}
+
+                FILE: ${file}
+                LANGUAGE: ${editor.document.languageId}
+                SELECTED LINES: ${startLine}-${endLine}
+
+                EXACT SELECTED CODE:
+                \`\`\`
+                ${selectedText}
+                \`\`\`
+
+                REQUIREMENTS:
+                1. Treat the selected code as the target region.
+                2. Read the actual file using the workspace tools before editing.
+                3. Preserve surrounding code and unrelated functionality.
+                4. Use propose_edit to stage the change; never write directly.
+                5. Use an exact, unique old_text snippet. If the selection is not
+                unique, include sufficient neighboring context.
+                6. Explain what the proposed change does.
+                7. Do not claim that the change has been applied.
+                `;
+
+            await openAgentPanel(prompt);
+        }
+    );
+
     registerReviewCommands(context);
     registerMultiReview(context);
-    context.subscriptions.push(disposable);
+
+    context.subscriptions.push(disposable, editSelection);
 }
 
-async function openAgentPanel() {
+async function openAgentPanel(initialPrompt?: string) {
 	
     const { TrueForge } = await import(
         '@truefoundry/trueforge-sdk'
@@ -96,6 +177,7 @@ async function openAgentPanel() {
     let busy = false;
     let cancelRequested = false;
     let disposed = false;
+    let pendingInitialPrompt = initialPrompt;
 
     panel.onDidDispose(() => {
         disposed = true;
@@ -130,6 +212,7 @@ async function openAgentPanel() {
                                 'list_files',
                                 'read_file',
                                 'search_code',
+                                'search_symbols',
                                 'propose_edit'
                             ],
                             preload: true
@@ -299,6 +382,12 @@ async function openAgentPanel() {
         if (message.type === 'newSession' && !busy) {
             sessionId = undefined;
             send({ type: 'reset' });
+        }
+
+        if (message.type === 'ready' && pendingInitialPrompt) {
+            const prompt = pendingInitialPrompt;
+            pendingInitialPrompt = undefined;
+            await runPrompt(prompt);
         }
     });
 
@@ -532,6 +621,7 @@ function getWebviewContent(): string {
             block: 'end'
         });
     });
+    vscode.postMessage({ type: 'ready' }); 
 </script>
 </body>
 </html>`;

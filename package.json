@@ -35,15 +35,25 @@
         "title": "Forge Editor: Undo Last Applied Change"
     },
     {
-    "command": "forge-editor.applyAll",
-    "title": "Forge Editor: Apply All Staged Changes"
+      "command": "forge-editor.applyAll",
+      "title": "Forge Editor: Apply All Staged Changes"
     },
     {
         "command": "forge-editor.undoBatch",
         "title": "Forge Editor: Undo Multi-File Change"
-    }
-]
-
+    },
+    {
+    "command": "forge-editor.editSelection",
+    "title": "Forge Editor: Edit Selection"
+  }
+],
+  "keybindings": [
+      {
+          "command": "forge-editor.editSelection",
+          "key": "ctrl+shift+alt+e",
+          "when": "editorTextFocus && editorHasSelection"
+      }
+  ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
