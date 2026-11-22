@@ -208,4 +208,7 @@ Lint reported zero errors and 16 style warnings.
 
 ## License
 
-Add the chosen open-source license in the root `LICENSE` file before distribution.
+## License
+
+This project is licensed under the MIT License.
+See the [LICENSE](LICENSE) file for details.

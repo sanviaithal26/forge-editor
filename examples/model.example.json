@@ -1,0 +1,6 @@
+{
+  "description": "Example Forge Editor model selection",
+  "model": "google-gemini/gemini-3-1-flash-lite",
+  "configured_in": "TrueForge",
+  "credentials_managed_by": "TrueForge"
+}
