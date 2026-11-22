@@ -1,71 +1,211 @@
-# forge-editor README
+# Forge Editor
 
-This is the README for your extension "forge-editor". After writing up a brief description, we recommend including the following sections.
+**A repository-aware AI coding assistant for Visual Studio Code, powered by TrueForge.**
+
+Forge Editor connects a VS Code extension to the TrueForge agent runtime. It enables an AI agent to inspect a repository, locate relevant code, propose coordinated multi-file edits, and present changes for developer review before modifying source files.
+
+**Repository:** https://github.com/sanviaithal26/forge-editor
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Repository-aware agent
+- TrueForge SDK integration for agent sessions, turns, and streaming events.
+- MCP tools for repository listing, file reading, literal code search, symbol search, and staged edit proposals.
+- Agent-driven discovery of relevant files for multi-file changes.
 
-For example if there is an image subfolder under your extension project workspace:
+### Context retrieval
+- `@file:path/to/file` retrieves explicitly referenced files.
+- `@symbol:symbolName` searches for function, class, method, interface, type, and variable definitions.
+- Search results include file paths and line numbers.
+- Per-call character limits constrain file reading, code search, and symbol search.
+- The agent is instructed to prioritize explicit references and avoid redundant retrieval.
 
-\!\[feature X\]\(images/feature-x.png\)
+### Safe editing and review
+- Inline editing through a VS Code command and keyboard shortcut: `Ctrl+Shift+Alt+E`.
+- Staged edit proposals rather than direct source-file writes by the agent.
+- Diff previews inside VS Code.
+- Hunk-level accept/reject workflow.
+- Multi-file Apply All and Undo Batch.
+- Original-content hash checks to detect changes made after a proposal was created.
+- Undo support for applied changes.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Streaming and cancellation
+- Agent responses stream into the editor.
+- A Stop action cancels the active TrueForge session.
+- Cancellation was tested; the workspace remained unchanged in the tested scenario.
+
+## Architecture
+
+```text
+VS Code Extension (TypeScript)
+          |
+          | TrueForge TypeScript SDK
+          v
+TrueForge Local Runtime
+          |
+          | Agent sessions and turns
+          v
+Coding Agent
+          |
+          | MCP tool calls
+          v
+Workspace MCP Server
+          |
+          +-- list_files
+          +-- read_file
+          +-- search_code
+          +-- search_symbols
+          +-- propose_edit
+          |
+          v
+Local Staging Store
+          |
+          v
+VS Code Diff Review
+          |
+          v
+Developer accepts / rejects
+```
+
+The agent instructions are defined by the `AGENT_INSTRUCTIONS` constant in `src/extension.ts` and supplied to the TrueForge agent when a session is created.
+
+The MCP server is implemented in `mcp/server.mjs`; staged edit proposals are implemented in `mcp/staging.mjs`.
+
+## Starting point
+
+Built from a standard VS Code TypeScript extension scaffold. This project is not a fork of Cline, Continue, Roo Code, or another coding-agent product. The agent loop is implemented using the TrueForge SDK.
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Visual Studio Code 1.146 or later.
+- Node.js 22 or compatible supported version.
+- npm.
+- TrueForge local runtime.
+- A model configured in TrueForge.
+- A configured MCP workspace endpoint.
 
-## Extension Settings
+## Setup
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+### 1. Clone the repository
 
-For example:
+```bash
+git clone https://github.com/sanviaithal26/forge-editor.git
+cd forge-editor
+npm install
+```
 
-This extension contributes the following settings:
+### 2. Prepare the test workspace
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+The current MCP server is configured to work with a fixed Flask test workspace.
 
-## Known Issues
+```bash
+git clone https://github.com/pallets/flask.git ~/projects/forge-tests/flask
+cd ~/projects/forge-tests/flask
+git checkout 3.1.3
+```
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### 3. Start the MCP workspace server
 
-## Release Notes
+Open a separate terminal:
 
-Users appreciate release notes as you update your extension.
+```bash
+cd ~/projects/forge-editor
 
-### 1.0.0
+FORGE_WORKSPACE_ROOT="$HOME/projects/forge-tests/flask" \
+node mcp/server.mjs
+```
 
-Initial release of ...
+The MCP endpoint is:
 
-### 1.0.1
+```text
+http://127.0.0.1:8765/mcp
+```
 
-Fixed issue #.
+Configure the local TrueForge runtime to use this workspace MCP server.
 
-### 1.1.0
+### 4. Start TrueForge
 
-Added features X, Y, and Z.
+In another terminal:
 
----
+```bash
+OUTBOUND_URL_ALLOWED_HOSTS='["127.0.0.1"]' \
+npx @truefoundry/trueforge@latest
+```
 
-## Following extension guidelines
+The local dashboard is available at:
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+```text
+http://localhost:8790
+```
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+Configure a supported model in the TrueForge runtime before starting an agent session.
 
-## Working with Markdown
+### 5. Configure the model
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+The tested model identifier is:
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+```text
+google-gemini/gemini-3-1-flash-lite
+```
 
-## For more information
+The model is configured through TrueForge. The current extension also specifies the model identifier in the `MODEL` constant in `src/extension.ts`. To use a different model, configure it in TrueForge and update that identifier to match.
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+Do not commit API keys or credentials. Configure provider credentials through the appropriate TrueForge configuration mechanism.
 
-**Enjoy!**
+### 6. Launch the extension
+
+From the Forge Editor repository:
+
+```bash
+npm run compile
+```
+
+Open the project in VS Code and press `F5` to launch the Extension Development Host.
+
+Use the Command Palette to run:
+
+- `Forge Editor: Open Agent`
+- `Forge Editor: Review Staged Changes`
+- `Forge Editor: Edit Selection`
+
+The inline-edit shortcut is `Ctrl+Shift+Alt+E` when an editor selection is active.
+
+## Testing
+
+The following checks were reported during development:
+
+| Test | Result |
+|---|---|
+| Flask helper and CLI tests | 92 passed, 3 skipped |
+| TypeScript compilation | Passed |
+| VS Code extension-host test | 1 passing |
+| Apply All and Undo Batch | Tested successfully |
+| Inline editing | Tested successfully |
+| `@file` and `@symbol` retrieval | Tested successfully |
+| Context retrieval limits | Tested successfully |
+| Cancellation | Tested successfully; workspace unchanged |
+
+Lint reported zero errors and 16 style warnings.
+
+## Known limitations
+
+- The MCP server currently accesses a configured Flask workspace, not arbitrary folders opened in VS Code.
+- The model identifier is currently specified in the extension source; model switching is not exposed as an extension setting.
+- Context limits apply per tool call, not through a strict cumulative counter across an entire user request.
+- Symbol retrieval uses declaration-pattern matching rather than a full AST or language-server index.
+- The agent currently has no MCP terminal-command execution tool.
+- Automatic fallback to a second model has not been implemented or verified.
+- The current implementation has been tested with the configured Gemini model through TrueForge, not with every supported provider.
+
+## Development tools
+
+- TypeScript and Visual Studio Code Extension API
+- TrueForge TypeScript SDK
+- Model Context Protocol (MCP)
+- Node.js, Express, and Zod
+- Gemini through the TrueForge runtime
+- ChatGPT and Gemini as development assistants
+
+## License
+
+Add the chosen open-source license in the root `LICENSE` file before distribution.
